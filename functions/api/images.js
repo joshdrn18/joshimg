@@ -1,0 +1,2 @@
+import {json,requireAdmin} from '../_shared.js';
+export async function onRequestGet({request,env}){const denied=await requireAdmin(request,env);if(denied)return denied;const {results=[]}=await env.DB.prepare('SELECT id, filename, content_type, size_bytes, created_at FROM images ORDER BY created_at DESC LIMIT 500').all();const origin=new URL(request.url).origin;return json({images:results.map(x=>({id:x.id,filename:x.filename,contentType:x.content_type,sizeBytes:x.size_bytes,createdAt:x.created_at,viewerUrl:`/i/${x.id}`,directUrl:`/img/${x.id}`}))})}

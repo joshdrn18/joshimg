@@ -1,0 +1,2 @@
+import {json,requireAdmin,safeId} from '../../_shared.js';
+export async function onRequestDelete({request,env,params}){const denied=await requireAdmin(request,env);if(denied)return denied;const id=String(params.id||'');if(!safeId(id))return json({error:'Invalid image ID.'},400);const row=await env.DB.prepare('SELECT object_key FROM images WHERE id=?').bind(id).first();if(!row)return json({error:'Image not found.'},404);await env.IMAGES.delete(row.object_key);await env.DB.prepare('DELETE FROM images WHERE id=?').bind(id).run();return json({ok:true})}

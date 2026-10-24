@@ -1,0 +1,12 @@
+const COOKIE='joshimg_session';
+const json=(data,status=200,headers={})=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff',...headers}});
+const secureHeaders={'x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','permissions-policy':'camera=(), microphone=(), geolocation=()'};
+function b64url(bytes){let s='';for(const b of new Uint8Array(bytes))s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+async function hmac(secret,value){const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return b64url(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(value)))}
+export async function makeSession(env){const payload=b64url(new TextEncoder().encode(JSON.stringify({exp:Date.now()+8*60*60*1000,nonce:crypto.randomUUID()})));return payload+'.'+await hmac(env.SESSION_SECRET,payload)}
+export async function validSession(request,env){if(!env.SESSION_SECRET)return false;const cookie=request.headers.get('Cookie')||'';const m=cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith(COOKIE+'='));if(!m)return false;const token=decodeURIComponent(m.slice(COOKIE.length+1));const parts=token.split('.');if(parts.length!==2)return false;const expected=await hmac(env.SESSION_SECRET,parts[0]);if(expected.length!==parts[1].length)return false;let diff=0;for(let i=0;i<expected.length;i++)diff|=expected.charCodeAt(i)^parts[1].charCodeAt(i);if(diff!==0)return false;try{const payload=JSON.parse(atob(parts[0].replace(/-/g,'+').replace(/_/g,'/')));return payload.exp>Date.now()}catch{return false}}
+export function cookieHeader(value,maxAge=28800){return `${COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`}
+export async function requireAdmin(request,env){if(!await validSession(request,env))return json({error:'Please sign in again.'},401);return null}
+export function html(body,status=200){return new Response(body,{status,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store',...secureHeaders}})}
+export function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+export function safeId(id){return /^[a-f0-9-]{36}$/i.test(id)}
